@@ -5,7 +5,8 @@ const axios = require('axios');
 router.get('/funding-rate', async (req, res) => {
   try {
     const { symbol, limit = 1 } = req.query;
-
+    const { baseURL } = req.app.get('binanceConfig');
+    
     if (!symbol) {
       return res.status(400).json({
         code: 400,
@@ -15,15 +16,13 @@ router.get('/funding-rate', async (req, res) => {
     }
 
     // 获取当前资金费率
-    const currentRateResponse = await axios.get('https://fapi.binance.com/fapi/v1/premiumIndex', {
-      params: {
-        symbol: symbol.toUpperCase()
-      }
+    const currentRateResponse = await axios.get(`${baseURL}/fapi/v1/premiumIndex`, {
+      params: { symbol: symbol.toUpperCase() }
     });
 
     // 获取历史资金费率
-    const historyResponse = await axios.get('https://fapi.binance.com/fapi/v1/fundingRate', {
-      params: {
+    const historyResponse = await axios.get(`${baseURL}/fapi/v1/fundingRate`, {
+      params: { 
         symbol: symbol.toUpperCase(),
         limit: Math.min(limit, 1000)
       }

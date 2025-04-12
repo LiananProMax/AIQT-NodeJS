@@ -5,6 +5,7 @@ const axios = require('axios');
 router.get('/klines', async (req, res) => {
   try {
     const { symbol, interval = '1m', limit = 500 } = req.query;
+    const { baseURL } = req.app.get('binanceConfig');
 
     if (!symbol) {
       return res.status(400).json({
@@ -14,7 +15,7 @@ router.get('/klines', async (req, res) => {
       });
     }
 
-    const response = await axios.get('https://fapi.binance.com/fapi/v1/klines', {
+    const response = await axios.get(`${baseURL}/fapi/v1/klines`, {
       params: {
         symbol: symbol.toUpperCase(),
         interval,

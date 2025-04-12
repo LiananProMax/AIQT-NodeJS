@@ -4,36 +4,28 @@ const axios = require('axios');
 const crypto = require('crypto');
 const qs = require('querystring');
 
-function generateSignature(queryString) {
-  return crypto
-    .createHmac('sha256', process.env.API_SECRET)
-    .update(queryString)
-    .digest('hex');
-}
-
 router.get('/risk', async (req, res) => {
   try {
     const { symbol } = req.query;
-    const timestamp = Date.now();
-    
-    // 关键修复：无论是否传symbol，只保留timestamp参数
-    const params = { timestamp };
-    const queryString = qs.stringify(params, { encode: true, sort: true });
-    const signature = generateSignature(queryString);
+    const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
 
-    const response = await axios.get('https://fapi.binance.com/fapi/v2/account', {
-      headers: {
-        'X-MBX-APIKEY': process.env.API_KEY
-      },
-      params: {
-        ...params,
-        signature
-      }
+    const timestamp = Date.now();
+    const params = { timestamp };
+    const queryString = qs.stringify(params, { sort: true, encode: true });
+
+    const signature = crypto
+      .createHmac('sha256', apiSecret)
+      .update(queryString)
+      .digest('hex');
+      
+    const response = await axios.get(`${baseURL}/fapi/v2/account`, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+      params: { ...params, signature }
     });
 
     // 本地过滤持仓
     const accountData = response.data;
-    const positions = symbol 
+    const positions = symbol
       ? accountData.positions.filter(p => p.symbol === symbol.toUpperCase())
       : accountData.positions;
 
@@ -47,13 +39,13 @@ router.get('/risk', async (req, res) => {
         const isolatedWallet = parseFloat(position.isolatedWallet) || 0;
 
         // 格式化函数
-        const format = (num, decimals) => 
+        const format = (num, decimals) =>
           num !== null ? Number(num.toFixed(decimals)) : null;
 
         // 强平价计算
         let liquidationPrice = null;
         if (positionAmt !== 0) {
-          const rate = positionAmt > 0 ? (1 - 1/leverage + 0.004) : (1 + 1/leverage - 0.004);
+          const rate = positionAmt > 0 ? (1 - 1 / leverage + 0.004) : (1 + 1 / leverage - 0.004);
           liquidationPrice = entryPrice * rate;
         }
 
@@ -71,7 +63,7 @@ router.get('/risk', async (req, res) => {
             4
           ),
           marginRatio: format(
-            isolatedWallet > 0 
+            isolatedWallet > 0
               ? (positionAmt * (markPrice - entryPrice)) / isolatedWallet
               : parseFloat(accountData.totalMarginBalance) > 0
                 ? (positionAmt * (markPrice - entryPrice)) / parseFloat(accountData.totalMarginBalance)
