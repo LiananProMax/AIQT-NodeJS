@@ -53,6 +53,9 @@ app.use('/api/market', require('./api/market/funding-rate'));
 app.use('/api/order/open', require('./api/order/open/market'));
 app.use('/api/order/close', require('./api/order/close/market'));
 
+app.use('/api/position', require('./api/position/leverage'));
+app.use('/api/position', require('./api/position/margin-mode'));
+
 // 统一错误处理
 app.use((err, req, res, next) => {
   console.error(err.stack);
