@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const validateSignature = require('../../middleware/signatureValidator');
 
-router.get('/klines', async (req, res) => {
+router.get('/klines', validateSignature(), async (req, res) => {
   try {
     const { symbol, interval = '1m', limit = 500 } = req.query;
     const { baseURL } = req.app.get('binanceConfig');

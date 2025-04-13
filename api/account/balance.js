@@ -3,8 +3,9 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const qs = require('querystring');
+const validateSignature = require('../../middleware/signatureValidator');
 
-router.get('/balance', async (req, res) => {
+router.get('/balance', validateSignature(), async (req, res) => {
   try {
     const { currency } = req.query;
     const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
@@ -20,7 +21,7 @@ router.get('/balance', async (req, res) => {
     const timestamp = Date.now();
     const params = { timestamp };
     const queryString = qs.stringify(params, { sort: true, encode: true });
-    
+
     const signature = crypto
       .createHmac('sha256', apiSecret)
       .update(queryString)

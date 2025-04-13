@@ -3,10 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
+// app.use(express.json()); // 解析 application/json
+// app.use(express.urlencoded({ extended: true })); // 解析 application/x-www-form-urlencoded
+
 // 获取网络配置
 function getBinanceConfig() {
   const useTestnet = process.argv.includes('--testnet');
-  return {
+  const config = {
     baseURL: useTestnet 
       ? 'https://testnet.binancefuture.com' 
       : 'https://fapi.binance.com',
@@ -17,10 +20,24 @@ function getBinanceConfig() {
       ? process.env.TESTNET_API_SECRET 
       : process.env.API_SECRET
   };
+
+  // 调试：打印环境变量和配置
+  // console.log('Environment Variables:', {
+  //   API_KEY: process.env.API_KEY,
+  //   API_SECRET: process.env.API_SECRET,
+  //   TESTNET_API_KEY: process.env.TESTNET_API_KEY,
+  //   TESTNET_API_SECRET: process.env.TESTNET_API_SECRET
+  // });
+  // console.log('Generated Binance Config:', config);
+
+  return config;
 }
 
 // 存储全局配置
 app.set('binanceConfig', getBinanceConfig());
+
+// 调试：确认配置已设置
+console.log('Stored Binance Config:', app.get('binanceConfig'));
 
 // 全局中间件
 app.use(cors());

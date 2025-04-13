@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const validateSignature = require('../../middleware/signatureValidator');
 
-router.get('/funding-rate', async (req, res) => {
+router.get('/funding-rate', validateSignature(), async (req, res) => {
   try {
     const { symbol, limit = 1 } = req.query;
     const { baseURL } = req.app.get('binanceConfig');
-    
+
     if (!symbol) {
       return res.status(400).json({
         code: 400,

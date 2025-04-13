@@ -3,10 +3,12 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const qs = require('querystring');
+const validateSignature = require('../../../middleware/signatureValidator');
 
-router.post('/market', async (req, res) => {
+router.post('/market', validateSignature(), async (req, res) => {
   try {
     const { symbol, positionSide } = req.body;
+
     const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
 
     // 参数验证
@@ -26,21 +28,34 @@ router.post('/market', async (req, res) => {
       });
     }
 
-    const timestamp = Date.now();
+    // 获取服务器时间
+    let timestamp;
+    try {
+      const serverTimeResponse = await axios.get(`${baseURL}/fapi/v1/time`, { timeout: 2000 });
+      timestamp = serverTimeResponse.data.serverTime;
+    } catch (timeError) {
+      console.error('Failed to get server time:', timeError.message);
+      timestamp = Date.now();
+    }
     const closeSide = positionSide.toUpperCase() === 'LONG' ? 'SELL' : 'BUY';
 
-    // 构建参数
+    // 构建参数（添加recvWindow）
     const params = {
       symbol: symbol.toUpperCase(),
       side: closeSide,
       type: 'MARKET',
       timestamp,
-      reduceOnly: 'true', // 强制为减仓单
-      positionSide: positionSide.toUpperCase()
+      reduceOnly: 'true',
+      positionSide: positionSide.toUpperCase(),
+      recvWindow: 5000 // 添加接收窗口
     };
+    // 生成签名（严格模式）
+    const queryString = qs.stringify(params, {
+      sort: true,
+      encode: true,
+      strict: true
+    });
 
-    // 生成签名
-    const queryString = qs.stringify(params, { sort: true, encode: true });
     const signature = crypto
       .createHmac('sha256', apiSecret)
       .update(queryString)

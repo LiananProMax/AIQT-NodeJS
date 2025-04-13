@@ -3,21 +3,26 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const qs = require('querystring');
+const validateSignature = require('../../middleware/signatureValidator');
 
-router.get('/risk', async (req, res) => {
+router.get('/risk', validateSignature(), async (req, res) => {
   try {
     const { symbol } = req.query;
     const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
 
     const timestamp = Date.now();
     const params = { timestamp };
-    const queryString = qs.stringify(params, { sort: true, encode: true });
+    const queryString = qs.stringify(params, {
+      sort: true,
+      encode: true,
+      strict: true // 严格模式确保空值不参与签名
+    })
 
     const signature = crypto
       .createHmac('sha256', apiSecret)
       .update(queryString)
       .digest('hex');
-      
+
     const response = await axios.get(`${baseURL}/fapi/v2/account`, {
       headers: { 'X-MBX-APIKEY': apiKey },
       params: { ...params, signature }
