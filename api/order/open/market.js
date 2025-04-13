@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const qs = require('querystring');
 const validateSignature = require('../../../middleware/signatureValidator');
 
-router.post('/market',validateSignature(), async (req, res) => {
+router.post('/market', validateSignature(), async (req, res) => {
   try {
     // 1. 检查请求头
     if (!req.headers['content-type']?.includes('application/json')) {
@@ -64,8 +64,8 @@ router.post('/market',validateSignature(), async (req, res) => {
     };
 
     // 6. 生成查询字符串
-    const queryString = qs.stringify(params);
-    console.log('Query String:', queryString);
+    const queryString = qs.stringify(params, { sort: true, encode: true }); // 添加排序
+    console.log('Sorted Query String:', queryString); // 已排序
     console.log('Params:', params);
 
     // 7. 生成签名
@@ -76,22 +76,23 @@ router.post('/market',validateSignature(), async (req, res) => {
     console.log('Signature:', signature);
 
     // 8. 发送请求到币安 API
-    const requestBody = qs.stringify({ ...params, signature });
+    const requestBody = `${queryString}&signature=${signature}`; // 排序后字符串 + 签名
     console.log('Request Body:', requestBody);
 
+    // 9. 发送请求到币安 API (修改！)
     const response = await axios.post(
       `${baseURL}/fapi/v1/order`,
-      requestBody,
+      requestBody, // 使用新的 requestBody
       {
         headers: {
           'X-MBX-APIKEY': apiKey,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        timeout: 5000
+        timeout: 5000 // 建议添加超时
       }
     );
 
-    // 9. 处理响应
+    // 10. 处理响应
     res.json({
       code: 200,
       msg: 'Order placed',
