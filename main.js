@@ -51,7 +51,9 @@ app.use('/api/market', require('./api/market/klines'));
 app.use('/api/market', require('./api/market/funding-rate'));
 
 app.use('/api/order/open', require('./api/order/open/market'));
+app.use('/api/order/open', require('./api/order/open/limit'));
 app.use('/api/order/close', require('./api/order/close/market'));
+app.use('/api/order/close', require('./api/order/close/limit'));
 app.use('/api/order/active', require('./api/order/active'));
 app.use('/api/order', require('./api/order/cancel'));
 app.use('/api/order', require('./api/order/update'));
