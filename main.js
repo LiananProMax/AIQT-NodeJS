@@ -3,8 +3,14 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-// app.use(express.json()); // 解析 application/json
-// app.use(express.urlencoded({ extended: true })); // 解析 application/x-www-form-urlencoded
+const requiredEnv = ['API_KEY', 'API_SECRET', 'TESTNET_API_KEY', 'TESTNET_API_SECRET', 'PORT'];
+for (const env of requiredEnv) {
+  if (!process.env[env]) {
+    console.error(`Missing environment variable: ${env}`);
+    process.exit(1);
+  }
+}
+
 
 // 获取网络配置
 function getBinanceConfig() {
@@ -21,23 +27,11 @@ function getBinanceConfig() {
       : process.env.API_SECRET
   };
 
-  // 调试：打印环境变量和配置
-  // console.log('Environment Variables:', {
-  //   API_KEY: process.env.API_KEY,
-  //   API_SECRET: process.env.API_SECRET,
-  //   TESTNET_API_KEY: process.env.TESTNET_API_KEY,
-  //   TESTNET_API_SECRET: process.env.TESTNET_API_SECRET
-  // });
-  // console.log('Generated Binance Config:', config);
-
   return config;
 }
 
 // 存储全局配置
 app.set('binanceConfig', getBinanceConfig());
-
-// 调试：确认配置已设置
-console.log('Stored Binance Config:', app.get('binanceConfig'));
 
 // 全局中间件
 app.use(cors());
@@ -64,11 +58,9 @@ app.use('/api/position', require('./api/position/margin-mode'));
 // 统一错误处理
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    code: 500,
-    msg: 'Internal Server Error',
-    data: null 
-  });
+  const statusCode = err.response?.status || 500;
+  const message = err.response?.data?.msg || 'Internal Server Error';
+  res.status(statusCode).json({ code: statusCode, msg: message, data: null });
 });
 
 app.listen(process.env.PORT, () => {

@@ -50,10 +50,9 @@ router.post('/leverage', validateSignature(), async (req, res) => {
             timestamp: typeof params.timestamp
         });
         // 生成签名
+        // 统一使用严格字母排序
         const orderedParams = new URLSearchParams(
-            Object.entries(params)
-                .sort() // 按字母顺序排序
-                .map(([k, v]) => [k, v.toString()]) // 确保值为字符串
+            Object.entries(params).sort((a, b) => a[0].localeCompare(b[0]))
         ).toString();
         const signature = crypto
             .createHmac('sha256', apiSecret)

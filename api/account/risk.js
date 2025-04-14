@@ -3,6 +3,8 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const qs = require('querystring');
+const { Decimal } = require('decimal.js');
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 const validateSignature = require('../../middleware/signatureValidator');
 
 router.get('/risk', validateSignature(), async (req, res) => {
@@ -42,46 +44,44 @@ router.get('/risk', validateSignature(), async (req, res) => {
       : accountData.positions;
 
     const result = positions
-      .filter(p => Math.abs(parseFloat(p.positionAmt)) > 0)
+      .filter(p => new Decimal(p.positionAmt).abs().gt(0))
       .map(position => {
-        const positionAmt = parseFloat(position.positionAmt);
-        const entryPrice = parseFloat(position.entryPrice) || 0;
-        const markPrice = parseFloat(position.markPrice) || 0;
-        const leverage = parseFloat(position.leverage) || 1;
-        const isolatedWallet = parseFloat(position.isolatedWallet) || 0;
-
-        // 格式化函数
+        // 使用 Decimal 包装所有数值
+        const positionAmt = new Decimal(position.positionAmt || 0);
+        const entryPrice = new Decimal(position.entryPrice || 0);
+        const markPrice = new Decimal(position.markPrice || 0);
+        const leverage = new Decimal(position.leverage || 1);
+        const isolatedWallet = new Decimal(position.isolatedWallet || 0);
+        const totalMarginBalance = new Decimal(accountData.totalMarginBalance || 0);
+        // 格式化函数适配 Decimal
         const format = (num, decimals) =>
-          num !== null ? Number(num.toFixed(decimals)) : null;
-
-        // 强平价计算
+          num !== null ? new Decimal(num).toDecimalPlaces(decimals).toNumber() : null;
+        // 重新计算关键指标
+        const unrealizedProfit = positionAmt.mul(markPrice.minus(entryPrice));
+        const marginRatio = isolatedWallet.gt(0)
+          ? unrealizedProfit.div(isolatedWallet)
+          : totalMarginBalance.gt(0)
+            ? unrealizedProfit.div(totalMarginBalance)
+            : new Decimal(0);
+        // 强平价计算（使用 Decimal 运算）
         let liquidationPrice = null;
-        if (positionAmt !== 0) {
-          const rate = positionAmt > 0 ? (1 - 1 / leverage + 0.004) : (1 + 1 / leverage - 0.004);
-          liquidationPrice = entryPrice * rate;
+        if (!positionAmt.isZero()) {
+          const rate = positionAmt.gt(0)
+            ? new Decimal(1).sub(new Decimal(1).div(leverage)).add(0.004)
+            : new Decimal(1).add(new Decimal(1).div(leverage)).sub(0.004);
+          liquidationPrice = entryPrice.mul(rate);
         }
-
         return {
           symbol: position.symbol,
           marginMode: position.isolated ? 'ISOLATED' : 'CROSS',
-          leverage,
+          leverage: leverage.toNumber(),
           entryPrice: format(entryPrice, 2),
           markPrice: format(markPrice, 2),
           liquidationPrice: format(liquidationPrice, 2),
-          positionAmt: format(Math.abs(positionAmt), 4),
-          side: positionAmt > 0 ? 'LONG' : 'SHORT',
-          unrealizedProfit: format(
-            positionAmt * (markPrice - entryPrice),
-            4
-          ),
-          marginRatio: format(
-            isolatedWallet > 0
-              ? (positionAmt * (markPrice - entryPrice)) / isolatedWallet
-              : parseFloat(accountData.totalMarginBalance) > 0
-                ? (positionAmt * (markPrice - entryPrice)) / parseFloat(accountData.totalMarginBalance)
-                : 0,
-            4
-          )
+          positionAmt: format(positionAmt.abs(), 4),
+          side: positionAmt.gt(0) ? 'LONG' : 'SHORT',
+          unrealizedProfit: format(unrealizedProfit, 4),
+          marginRatio: format(marginRatio, 4)
         };
       });
 
