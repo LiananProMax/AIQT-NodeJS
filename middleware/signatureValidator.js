@@ -4,7 +4,7 @@ const qs = require('querystring');
 
 module.exports = () => {
   return async (req, res, next) => {
-    if (process.env.NODE_ENV === 'production') return next();
+    // if (process.env.NODE_ENV === 'production') return next();
     
     try {
       const { apiSecret } = req.app.get('binanceConfig');
