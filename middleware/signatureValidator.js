@@ -4,7 +4,6 @@ const qs = require('querystring');
 
 module.exports = () => {
   return async (req, res, next) => {
-    // if (process.env.NODE_ENV === 'production') return next();
     
     try {
       const { apiSecret } = req.app.get('binanceConfig');
@@ -26,12 +25,6 @@ module.exports = () => {
         .createHmac('sha256', apiSecret)
         .update(orderedParams)
         .digest('hex');
-      
-      // 调试输出
-      console.log('\n===== Signature Debug =====');
-      console.log('Used Parameters:', params);
-      console.log('Ordered String:', orderedParams);
-      console.log('Regenerated Signature:', recreatedSign);
       
       // 验证签名（从响应头获取实际签名）
       const actualSign = res.get('X-MBX-SIGNATURE');
