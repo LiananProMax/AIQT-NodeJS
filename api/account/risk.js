@@ -7,8 +7,12 @@ const validateSignature = require('../../middleware/signatureValidator');
 
 router.get('/risk', validateSignature(), async (req, res) => {
   try {
-    const { symbol } = req.query;
+    // 获取查询参数
+    const { symbol, positionSide } = req.query;
     const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
+
+    // 检查账户是否为对冲模式
+    const isHedgeMode = await checkPositionMode(apiKey, apiSecret, baseURL);
 
     const timestamp = Date.now();
     const params = { timestamp };
@@ -31,7 +35,10 @@ router.get('/risk', validateSignature(), async (req, res) => {
     // 本地过滤持仓
     const accountData = response.data;
     const positions = symbol
-      ? accountData.positions.filter(p => p.symbol === symbol.toUpperCase())
+      ? accountData.positions.filter(p =>
+        p.symbol === symbol.toUpperCase() &&
+        (isHedgeMode ? p.positionSide === positionSide?.toUpperCase() : true)
+      )
       : accountData.positions;
 
     const result = positions
@@ -95,5 +102,21 @@ router.get('/risk', validateSignature(), async (req, res) => {
     });
   }
 });
+// 在文件底部添加检查持仓模式的函数
+async function checkPositionMode(apiKey, apiSecret, baseURL) {
+  const timestamp = Date.now();
+  const params = { timestamp };
+  const queryString = qs.stringify(params, { sort: true, encode: true });
+  const signature = crypto
+    .createHmac('sha256', apiSecret)
+    .update(queryString)
+    .digest('hex');
 
+  const response = await axios.get(`${baseURL}/fapi/v1/positionSide/dual`, {
+    headers: { 'X-MBX-APIKEY': apiKey },
+    params: { ...params, signature }
+  });
+
+  return response.data.dualSidePosition;
+}
 module.exports = router;

@@ -48,6 +48,7 @@ router.get('/', validateSignature(), async (req, res) => {
     const orders = response.data.map(order => ({
       orderId: order.orderId,
       symbol: order.symbol,
+      positionSide: order.positionSide || 'BOTH',
       price: parseFloat(order.price),
       origQty: parseFloat(order.origQty),
       executedQty: parseFloat(order.executedQty),

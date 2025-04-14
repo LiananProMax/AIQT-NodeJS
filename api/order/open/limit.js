@@ -120,6 +120,7 @@ function formatOrderResponse(data) {
   return {
     orderId: data.orderId,
     symbol: data.symbol,
+    positionSide: data.positionSide || 'BOTH',
     price: parseFloat(data.price),
     quantity: parseFloat(data.origQty),
     status: data.status,

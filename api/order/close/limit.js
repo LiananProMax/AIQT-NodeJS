@@ -90,6 +90,7 @@ router.post('/limit', validateSignature(), async (req, res) => {
       msg: 'Limit close order placed',
       data: {
         orderId: response.data.orderId,
+        positionSide: params.positionSide || 'BOTH',
         executedQty: parseFloat(response.data.executedQty),
         status: response.data.status
       }

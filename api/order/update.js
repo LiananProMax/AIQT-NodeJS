@@ -20,8 +20,8 @@ const getServerTime = async (baseURL) => {
 router.patch('/:orderId', validateSignature(), async (req, res) => {
     try {
         const { orderId } = req.params;
-        const { symbol, price, quantity, side  } = req.body;
-        const { baseURL, apiKey, apiSecret} = req.app.get('binanceConfig');
+        const { symbol, price, quantity, side } = req.body;
+        const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
         // 参数验证
         if (!symbol || !orderId || !side) {
             return res.status(400).json({
@@ -83,7 +83,10 @@ router.patch('/:orderId', validateSignature(), async (req, res) => {
         res.json({
             code: 200,
             msg: 'Order updated',
-            data: response.data
+            data: {
+                ...response.data,
+                positionSide: response.data.positionSide || 'BOTH'
+            }
         });
     } catch (error) {
         // 增强错误处理逻辑
@@ -119,7 +122,10 @@ async function getOriginalOrder(orderId, symbol, apiKey, apiSecret, baseURL) {
             headers: { 'X-MBX-APIKEY': apiKey },
             params: { ...params, signature }
         });
-        return response.data;
+        return {
+            ...response.data,
+            positionSide: response.data.positionSide || 'BOTH'
+        };
     } catch (e) {
         return null;
     }
