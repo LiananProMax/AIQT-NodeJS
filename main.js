@@ -52,6 +52,7 @@ app.use('/api/order/active', require('./api/order/active'));
 app.use('/api/order', require('./api/order/cancel'));
 app.use('/api/order', require('./api/order/update'));
 
+app.use('/api/position', require('./api/position'));
 app.use('/api/position', require('./api/position/leverage'));
 app.use('/api/position', require('./api/position/margin-mode'));
 
