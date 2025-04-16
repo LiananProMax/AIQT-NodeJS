@@ -23,7 +23,7 @@ router.post('/market', validateSignature(), async (req, res) => {
 
     // 2. 获取服务器时间和最新价格（并行请求）
     const { baseURL, apiKey, apiSecret } = req.app.get('binanceConfig');
-    
+
     const [timeRes, ticker] = await Promise.all([
       axios.get(`${baseURL}/fapi/v1/time`, { timeout: 2000 }),
       axios.get(`${baseURL}/fapi/v1/ticker/price`, {
@@ -31,7 +31,7 @@ router.post('/market', validateSignature(), async (req, res) => {
         timeout: 2000
       })
     ]);
-    
+
     timestamp = timeRes.data.serverTime;
     currentPrice = parseFloat(ticker.data.price);
     console.log('Synced server timestamp:', timestamp);
@@ -71,7 +71,7 @@ router.post('/market', validateSignature(), async (req, res) => {
     isHedgeMode = accountConfig.data.dualSidePosition;
     const position = accountInfo.data.positions.find(p => {
       const isMatch = p.symbol === symbol.toUpperCase();
-      return isHedgeMode 
+      return isHedgeMode
         ? isMatch && p.positionSide === positionSide.toUpperCase()
         : isMatch && Math.sign(parseFloat(p.positionAmt)) === (positionSide.toUpperCase() === 'LONG' ? 1 : -1);
     });
@@ -113,13 +113,13 @@ router.post('/market', validateSignature(), async (req, res) => {
 
     // 7. 检查对冲模式反向仓位
     if (isHedgeMode) {
-      const otherSidePosition = accountInfo.data.positions.find(p => 
-        p.symbol === symbol.toUpperCase() && 
+      const otherSidePosition = accountInfo.data.positions.find(p =>
+        p.symbol === symbol.toUpperCase() &&
         p.positionSide === (positionSide.toUpperCase() === 'LONG' ? 'SHORT' : 'LONG')
       );
-      
+
       if (otherSidePosition) {
-        console.log('Hedge mode detected opposite position:', 
+        console.log('Hedge mode detected opposite position:',
           `Side: ${otherSidePosition.positionSide}`,
           `Amount: ${otherSidePosition.positionAmt}`
         );
@@ -148,7 +148,7 @@ router.post('/market', validateSignature(), async (req, res) => {
     let response;
     for (let i = 0; i < 3; i++) {
       try {
-        response = await axios.post(`${baseURL}/fapi/v1/order`, 
+        response = await axios.post(`${baseURL}/fapi/v1/order`,
           qs.stringify({ ...params, signature }),
           {
             headers: {
@@ -167,7 +167,7 @@ router.post('/market', validateSignature(), async (req, res) => {
 
     // 11. 计算滑点
     const entryPrice = parseFloat(position.entryPrice);
-    const slippage = entryPrice > 0 
+    const slippage = entryPrice > 0
       ? ((currentPrice - entryPrice) / entryPrice * 100).toFixed(4) + '%'
       : 'N/A';
 
@@ -187,15 +187,15 @@ router.post('/market', validateSignature(), async (req, res) => {
 
   } catch (error) {
     console.error('Order Error:', error.response?.data || error.message);
-    
+
     const status = error.response?.status || 500;
     const message = error.response?.data?.msg || error.message;
     const errorCode = error.response?.data?.code;
 
     res.status(status).json({
       code: errorCode || status,
-      msg: errorCode === -1021 
-        ? 'Server time sync failed. Please retry.' 
+      msg: errorCode === -1021
+        ? 'Server time sync failed. Please retry.'
         : message,
       data: {
         timestamp,
@@ -207,4 +207,58 @@ router.post('/market', validateSignature(), async (req, res) => {
   }
 });
 
-module.exports = router;
+
+function formatOrderResponse(data) {
+  return {
+    orderId: data.orderId,
+    symbol: data.symbol,
+    executedQty: parseFloat(data.executedQty || 0),
+    avgPrice: parseFloat(data.avgPrice || 0),
+    status: data.status,
+    updateTime: data.updateTime,
+    clientOrderId: data.clientOrderId
+  };
+}
+
+
+async function getPositionInfo(symbol, positionSide, apiKey, apiSecret, baseURL) {
+  const timestamp = Date.now();
+  const params = { timestamp };
+  const signature = crypto
+    .createHmac('sha256', apiSecret)
+    .update(new URLSearchParams(params).toString())
+    .digest('hex');
+  const response = await axios.get(`${baseURL}/fapi/v2/account`, {
+    headers: { 'X-MBX-APIKEY': apiKey },
+    params: { ...params, signature }
+  });
+  return response.data.positions.find(p =>
+    p.symbol === symbol.toUpperCase() &&
+    (positionSide === 'BOTH' || p.positionSide === positionSide.toUpperCase())
+  );
+}
+
+async function getServerTimeWithRetry(baseURL) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const timeRes = await axios.get(`${baseURL}/fapi/v1/time`, { timeout: 2000 });
+      const serverTime = Number(timeRes.data.serverTime);
+      const localTime = Date.now();
+
+      // 时间差超过5秒显示警告
+      if (Math.abs(serverTime - localTime) > 5000) {
+        console.warn(`⚠️ 时间不同步 | Server: ${serverTime} | Local: ${localTime} | Diff: ${serverTime - localTime}ms`);
+      }
+
+      return serverTime;
+    } catch (e) {
+      if (i === 2) throw new Error('Failed to get server time');
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+}
+
+module.exports = router; // 直接导出路由实例
+module.exports.getPositionInfo = getPositionInfo; // 附加辅助函数为属性
+module.exports.formatOrderResponse = formatOrderResponse;
+module.exports.getServerTimeWithRetry = getServerTimeWithRetry;
