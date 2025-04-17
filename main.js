@@ -190,24 +190,25 @@ app.use(cors());
 app.use(express.json());
 
 // 路由注册
-app.use('/api/account', require('./api/account/balance'));
-app.use('/api/account', require('./api/account/risk'));
+// app.use('/api/account', require('./api/account/balance'));
+// app.use('/api/account', require('./api/account/risk'));
+app.use('/api/account', require('./api/account/summary'));
 
 app.use('/api/market', require('./api/market/klines'));
 app.use('/api/market', require('./api/market/funding-rate'));
 
 app.use('/api/order/open', require('./api/order/open/market'));
-app.use('/api/order/open', require('./api/order/open/limit'));
-app.use('/api/order/open', require('./api/order/open/stop'));
+// app.use('/api/order/open', require('./api/order/open/limit'));
+// app.use('/api/order/open', require('./api/order/open/stop'));
 
 app.use('/api/order/close', require('./api/order/close/market'));
-app.use('/api/order/close', require('./api/order/close/limit'));
+// app.use('/api/order/close', require('./api/order/close/limit'));
 // app.use('/api/order/close', require('./api/order/close/conditional'));
-app.use('/api/order/active', require('./api/order/active'));
+// app.use('/api/order/active', require('./api/order/active'));
 app.use('/api/order', require('./api/order/cancel'));
 app.use('/api/order', require('./api/order/update'));
 
-app.use('/api/position', require('./api/position'));
+// app.use('/api/position', require('./api/position'));
 app.use('/api/position', require('./api/position/leverage'));
 app.use('/api/position', require('./api/position/margin-mode'));
 
