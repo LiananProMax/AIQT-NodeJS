@@ -50,7 +50,7 @@ app.use('/api/order/open', require('./api/order/open/stop'));
 
 app.use('/api/order/close', require('./api/order/close/market'));
 app.use('/api/order/close', require('./api/order/close/limit'));
-app.use('/api/order/close', require('./api/order/close/conditional'));
+// app.use('/api/order/close', require('./api/order/close/conditional'));
 app.use('/api/order/active', require('./api/order/active'));
 app.use('/api/order', require('./api/order/cancel'));
 app.use('/api/order', require('./api/order/update'));
