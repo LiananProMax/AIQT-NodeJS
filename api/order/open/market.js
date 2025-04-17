@@ -4,6 +4,7 @@ const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
 const { Decimal } = require('decimal.js');
+const qs = require('qs');
 const validateSignature = require('../../../middleware/signatureValidator');
 
 // 简化版：只计算目标价格
@@ -214,29 +215,93 @@ router.post('/market', validateSignature(), async (req, res) => {
       }
     );
 
-    // 13. 格式化响应
+    // 13. 格式化响应并存储SL/TP订单ID
+    let marketOrderInfo = null;
+    let slOrderInfo = null;
+    let tpOrderInfo = null;
+    response.data.forEach(o => {
+      if (o && o.clientOrderId) { // 仅处理成功的订单
+        if (o.clientOrderId.includes('-M')) {
+          marketOrderInfo = o; // 存储市场订单详细信息（如果需要）
+        } else if (o.clientOrderId.includes('-SL')) {
+          slOrderInfo = o;
+        } else if (o.clientOrderId.includes('-TP')) {
+          tpOrderInfo = o;
+        }
+      }
+    });
     const result = {
-      // 检查 o 和 o.clientOrderId 都存在，然后再调用 includes
-      market: response.data.find(o => o && o.clientOrderId && o.clientOrderId.includes('-M')),
-      stopLoss: response.data.find(o => o && o.clientOrderId && o.clientOrderId.includes('-SL')),
-      takeProfit: response.data.find(o => o && o.clientOrderId && o.clientOrderId.includes('-TP'))
+      market: marketOrderInfo,
+      stopLoss: slOrderInfo,
+      takeProfit: tpOrderInfo
     };
+    // 13.1 存储成功的SL/TP订单以进行跟踪
+    const errorsInBatch = response.data.filter(o => o && typeof o.code === 'number' && o.code !== 200 && o.msg);
+    if (errorsInBatch.length === 0 && slOrderInfo && tpOrderInfo) { // 只有当所有3个订单都成功时才跟踪（或至少SL/TP）
+      const trackedSLTPOrders = req.app.locals.trackedSLTPOrders; // 访问存储
 
-    // 可选：找出并记录失败的订单
-    const errorsInBatch = response.data.filter(o => o && o.code && o.msg);
-    if (errorsInBatch.length > 0) {
-      console.warn('批处理订单中包含错误:', JSON.stringify(errorsInBatch, null, 2));
-      // 你可以在最终响应中包含这些错误信息
+      // --- 获取对冲模式状态 --- (Keep this part)
+      let isHedgeMode = false; // 默认
+      try {
+        const posModeTimestamp = Date.now();
+        const posModeParams = { timestamp: posModeTimestamp };
+        const posModeQuery = qs.stringify(posModeParams);
+        const posModeSig = crypto.createHmac('sha256', apiSecret).update(posModeQuery).digest('hex');
+        const modeRes = await axios.get(`${baseURL}/fapi/v1/positionSide/dual`, {
+          headers: { 'X-MBX-APIKEY': apiKey },
+          params: { ...posModeParams, signature: posModeSig }
+        });
+        isHedgeMode = modeRes.data.dualSidePosition;
+      } catch (modeError) {
+        console.error("在跟踪设置期间检查仓位模式时出错：", modeError.message);
+        // Handle error or assume one-way mode
+      }
+      // --- 结束获取对冲模式 ---
+
+      // --- 修改开始 ---
+      // 统一使用 LONG/SHORT 作为 Key 的方向部分
+      let actualPositionSide = side.toUpperCase() === 'BUY' ? 'LONG' : 'SHORT'; // 从请求的side推断 LONG/SHORT
+
+      let positionKey;
+      // 使用市场订单响应中的positionSide（如果可用且处于对冲模式）
+      const orderPositionSide = marketOrderInfo?.positionSide; // e.g., 'LONG', 'SHORT', 'BOTH'
+
+      if (isHedgeMode) {
+        // 对冲模式下，优先使用订单返回的具体方向（LONG/SHORT）
+        if (orderPositionSide && orderPositionSide !== 'BOTH') {
+          positionKey = `${symbol.toUpperCase()}_${orderPositionSide}`;
+        } else {
+          // 如果对冲模式下订单返回'BOTH'或未返回，则根据开仓方向推断
+          console.warn(`[跟踪] 对冲模式下 ${symbol} 的仓位 Side 不明确或为 'BOTH'。使用请求推断的 Side (${actualPositionSide})。`);
+          positionKey = `${symbol.toUpperCase()}_${actualPositionSide}`;
+        }
+      } else {
+        // 单向模式: key is symbol + 推断出的 side (LONG/SHORT)
+        positionKey = `${symbol.toUpperCase()}_${actualPositionSide}`;
+      }
+      const trackInfo = {
+        slOrderId: slOrderInfo.orderId,
+        tpOrderId: tpOrderInfo.orderId,
+        symbol: symbol.toUpperCase()
+        // 可选：需要时添加clientOrderIds：slClientOrderId: slOrderInfo.clientOrderId, ...
+      };
+      trackedSLTPOrders.set(positionKey, trackInfo);
+      console.log(`[跟踪] 添加${positionKey}的SL/TP：`, trackInfo);
+      debugLog.push(`跟踪${positionKey}的SL（${slOrderInfo.orderId}）/TP（${tpOrderInfo.orderId}）`);
+    } else if (errorsInBatch.length > 0) {
+      console.warn('[跟踪] 由于批量订单响应中的错误，不跟踪SL/TP。');
+      debugLog.push('由于批量订单响应中的错误，不跟踪SL/TP。');
     }
-
+    if (errorsInBatch.length > 0) {
+      console.warn('批处理订单中包含错误：', JSON.stringify(errorsInBatch, null, 2));
+    }
     debugLog.push(`请求完成，耗时: ${Date.now() - startTime}ms`);
-
     // 14. 最终响应
     return res.json({
-      code: 200, // 即使部分失败，HTTP 状态码通常也是 200
+      code: 200,
       msg: errorsInBatch.length > 0 ? '部分订单提交失败' : '订单提交成功',
-      data: result, // result 中失败的订单对应的值会是 undefined
-      errors: errorsInBatch.length > 0 ? errorsInBatch : undefined, // 可选地返回具体错误
+      data: result,
+      errors: errorsInBatch.length > 0 ? errorsInBatch : undefined,
       debug: process.env.NODE_ENV === 'development' ? debugLog : undefined
     });
 
