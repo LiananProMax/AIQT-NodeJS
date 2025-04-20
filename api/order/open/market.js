@@ -8,21 +8,25 @@ const qs = require('qs');
 const validateSignature = require('../../../middleware/signatureValidator');
 
 // 简化版：只计算目标价格
-function calculateTargetPrice(input, basePrice) {
+function calculateTargetPrice(input, basePrice, side) { // 添加 side 参数
   const priceStr = input.toString().trim();
   const isPercentage = priceStr.endsWith('%');
-  // 移除 '+' 或 '-' (如果存在) 来获取数值部分，保留原始符号用于判断方向
-  const sign = priceStr.startsWith('-') ? -1 : (priceStr.startsWith('+') ? 1 : 1); // 默认为正
-  const valueStr = priceStr.replace(/[%+-]/g, ''); // 移除所有 %, +, -
+  const signFromInput = priceStr.startsWith('-') ? -1 : 1; // 优先从输入获取符号
+  let valueStr = priceStr.replace(/[%+-]/g, '');
   let offsetValue = new Decimal(valueStr);
-
+  // 根据订单方向调整符号
+  if (side.toUpperCase() === 'SELL') { // 做空时，止盈应为负向偏移
+    if (!priceStr.startsWith('-') && !priceStr.startsWith('+')) {
+      // 如果用户未明确指定符号，假设止盈为负，止损为正
+      // 此处需根据参数类型（止盈/止损）进一步判断，此处简化为反转符号
+      offsetValue = offsetValue.mul(-1);
+    }
+  }
   if (isPercentage) {
-    // 百分比是相对于基准价的偏移
     const offsetAmount = basePrice.mul(offsetValue.div(100));
-    return basePrice.add(offsetAmount.mul(sign)); // 应用符号
+    return basePrice.add(offsetAmount);
   } else {
-    // 绝对值偏移
-    return basePrice.add(offsetValue.mul(sign)); // 应用符号
+    return basePrice.add(offsetValue.mul(signFromInput));
   }
 }
 
@@ -65,8 +69,8 @@ router.post('/market', validateSignature(), async (req, res) => {
     // 3. 计算目标价格
     // 假设 stopLoss 输入总是负向偏移 (e.g., '-5%', -100)
     // 假设 takeProfit 输入总是正向偏移 (e.g., '+3%', +50)
-    const stopLossTargetPrice = calculateTargetPrice(stopLoss, currentMarkPrice);
-    const takeProfitTargetPrice = calculateTargetPrice(takeProfit, currentMarkPrice);
+    const stopLossTargetPrice = calculateTargetPrice(stopLoss, currentMarkPrice, side);
+    const takeProfitTargetPrice = calculateTargetPrice(takeProfit, currentMarkPrice, side);
     debugLog.push(`Target prices calculated - StopLossTarget: ${stopLossTargetPrice}, TakeProfitTarget: ${takeProfitTargetPrice}`);
 
     // 4. 确定最终的触发价格，并防止立即触发
