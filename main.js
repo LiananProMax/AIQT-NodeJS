@@ -34,7 +34,7 @@ const safeDecimal = (value, fallback = 0) => {
 const trackedSLTPOrders = new Map();
 app.locals.trackedSLTPOrders = trackedSLTPOrders; // 通过app.locals使存储可访问
 
-const POLLING_INTERVAL_MS = 15000; // 每 15 秒检查一次（根据需要调整）
+const POLLING_INTERVAL_MS = 500; // 每 15 秒检查一次（根据需要调整）
 let isPolling = false; // 标记，防止并发轮询运行
 
 // 辅助函数，获取API配置（确保其可访问）
